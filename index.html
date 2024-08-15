@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>실시간 음량 그래프와 호흡 감지</title>
+    <title>실시간 음량 그래프와 개선된 호흡 감지</title>
     <style>
       body {
         font-family: Arial, sans-serif;
@@ -18,6 +18,12 @@
         border: 1px solid #000;
         margin-top: 20px;
       }
+      #controls {
+        margin-top: 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
       #startButton {
         font-size: 18px;
         padding: 10px 20px;
@@ -29,19 +35,39 @@
         font-weight: bold;
         margin-top: 20px;
       }
+      .slider-container {
+        display: flex;
+        align-items: center;
+        margin-top: 10px;
+      }
+      .slider-container label {
+        margin-right: 10px;
+      }
+      #thresholdValue {
+        margin-left: 10px;
+      }
     </style>
   </head>
   <body>
-    <h1>실시간 음량 그래프와 호흡 감지</h1>
+    <h1>실시간 음량 그래프와 개선된 호흡 감지</h1>
     <canvas id="volumeGraph" width="600" height="200"></canvas>
     <div id="breathStatus">호흡 상태: 준비</div>
-    <button id="startButton">시작</button>
+    <div id="controls">
+      <div class="slider-container">
+        <label for="thresholdSlider">음량 역치:</label>
+        <input type="range" id="thresholdSlider" min="0" max="100" value="25" />
+        <span id="thresholdValue">25</span>
+      </div>
+      <button id="startButton">시작</button>
+    </div>
 
     <script>
       const startButton = document.getElementById("startButton");
       const canvas = document.getElementById("volumeGraph");
       const ctx = canvas.getContext("2d");
       const breathStatus = document.getElementById("breathStatus");
+      const thresholdSlider = document.getElementById("thresholdSlider");
+      const thresholdValue = document.getElementById("thresholdValue");
 
       let audioContext;
       let analyser;
@@ -53,11 +79,19 @@
       let lastStateChangeTime = 0;
       let quietDuration = 0;
       let loudDuration = 0;
-      const THRESHOLD = 25;
+      let longQuietDuration = 0;
+      let THRESHOLD = 25;
       const QUIET_THRESHOLD = 20;
       const DURATION_THRESHOLD = 15; // 약 0.25초 (60fps 기준)
+      const LONG_QUIET_DURATION = 600; // 10초 (60fps 기준)
 
       startButton.addEventListener("click", startRecording);
+      thresholdSlider.addEventListener("input", updateThreshold);
+
+      function updateThreshold() {
+        THRESHOLD = parseInt(thresholdSlider.value);
+        thresholdValue.textContent = THRESHOLD;
+      }
 
       function startRecording() {
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -121,6 +155,16 @@
         ctx.font = "16px Arial";
         ctx.fillText(`평균 음량: ${roundedAverage}`, 10, 20);
 
+        // 역치 선 그리기
+        ctx.strokeStyle = "rgb(255, 0, 0)";
+        ctx.beginPath();
+        ctx.moveTo(0, canvas.height - (THRESHOLD / 100) * canvas.height);
+        ctx.lineTo(
+          canvas.width,
+          canvas.height - (THRESHOLD / 100) * canvas.height
+        );
+        ctx.stroke();
+
         // 호흡 상태 감지 및 표시
         updateBreathState(roundedAverage);
 
@@ -139,9 +183,17 @@
         if (average > THRESHOLD) {
           loudDuration++;
           quietDuration = 0;
+          longQuietDuration = 0;
         } else if (average <= QUIET_THRESHOLD) {
           quietDuration++;
           loudDuration = 0;
+          longQuietDuration++;
+
+          if (longQuietDuration >= LONG_QUIET_DURATION) {
+            changeBreathState("ready");
+            console.log("10초 이상 조용한 상태 지속. 준비 상태로 리셋.");
+            return;
+          }
         } else {
           quietDuration = 0;
           loudDuration = 0;
@@ -177,6 +229,7 @@
         breathStatus.textContent = `호흡 상태: ${getBreathStateText()}`;
         quietDuration = 0;
         loudDuration = 0;
+        longQuietDuration = 0;
       }
 
       function getBreathStateText() {
