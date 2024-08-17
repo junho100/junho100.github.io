@@ -84,6 +84,8 @@
       const QUIET_THRESHOLD = 20;
       const DURATION_THRESHOLD = 15; // 약 0.25초 (60fps 기준)
       const LONG_QUIET_DURATION = 600; // 10초 (60fps 기준)
+      const SEND_INTERVAL = 500; // 1초마다 데이터 전송
+      let lastSendTime = 0;
 
       startButton.addEventListener("click", startRecording);
       thresholdSlider.addEventListener("input", updateThreshold);
@@ -181,6 +183,12 @@
           10,
           canvas.height - 10
         );
+
+        const currentTime = new Date();
+        if (currentTime - lastSendTime >= SEND_INTERVAL) {
+          sendDataToServer(currentTime.toISOString(), roundedAverage);
+          lastSendTime = currentTime;
+        }
       }
 
       function updateBreathState(average) {
@@ -213,6 +221,7 @@
             if (quietDuration >= DURATION_THRESHOLD) {
               changeBreathState("between");
               audioElement.play();
+              sendDotToServer(new Date().toISOString(), average);
             }
             break;
           case "between":
@@ -265,6 +274,48 @@
           default:
             return "rgb(0, 0, 0)";
         }
+      }
+
+      function sendDataToServer(timestamp, roundedAverage) {
+        const data = {
+          timestamp: timestamp,
+          average: roundedAverage,
+        };
+
+        fetch("http://localhost:8080/audio/data", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(data),
+        })
+          .then((data) => {
+            console.log("서버 응답:", data);
+          })
+          .catch((error) => {
+            console.error("데이터 전송 오류:", error);
+          });
+      }
+
+      function sendDotToServer(timestamp, roundedAverage) {
+        const data = {
+          timestamp: timestamp,
+          average: roundedAverage,
+        };
+
+        fetch("http://localhost:8080/audio/dot", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(data),
+        })
+          .then((data) => {
+            console.log("서버 응답:", data);
+          })
+          .catch((error) => {
+            console.error("데이터 전송 오류:", error);
+          });
       }
     </script>
   </body>
